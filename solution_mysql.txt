@@ -1,0 +1,112 @@
+
+select * from salary;
+select * from income;
+select * from deduction;
+select * from emp_transaction;
+
+
+/*Solution*/
+INSERT INTO emp_transaction (emp_id, emp_name, trns_type, amount)
+SELECT *  from (
+				with table1 as (
+								select sal.emp_id, sal.emp_name, inc.income as trns_type,
+								round((case when inc.percentage then (inc.percentage/100 * sal.base_salary)
+										end
+									 )) as AMOUNT
+
+								from salary sal
+								CROSS join income inc),
+					 table2 as (
+								select sal.emp_id, sal.emp_name, ded.deduction as trns_type,
+								round((case 
+										when ded.percentage then (ded.percentage/100 *  sal.base_salary)
+									  end
+									 )) as AMOUNT
+
+								from salary sal
+								cross join deduction as ded),
+					 fullTable as (SELECT * FROM table1
+								   UNION all
+								   SELECT * FROM table2)
+				select * from fullTable
+) as x;
+
+select * from emp_transaction;
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+-- SOLUTION PostgreSQL
+select employee
+, basic, allowance, others
+, (basic + allowance + others) as gross
+, insurance, health, house 
+, (insurance + health + house) as total_deductions
+, (basic + allowance + others) - (insurance + health + house) as net_pay
+from crosstab('select emp_name, trns_type, sum(amount) as amount
+			   from emp_transaction
+			   group by emp_name, trns_type
+			   order by emp_name, trns_type'
+			  ,'select distinct trns_type from emp_transaction order by trns_type')
+	as result(employee varchar, Allowance numeric, basic numeric, health numeric
+			 , house numeric, insurance numeric, others numeric)
+
+
+
+
+-- SOLUTION Microsoft SQL Server (Similar works for Oracle too, just replace [] with "")
+select Employee
+, Basic, Allowance, Others
+, (Basic + Allowance + Others) as Gross
+, Insurance, Health, House
+, (Insurance + Health + House) as Total_Deductions
+, ((Basic + Allowance + Others) - (Insurance + Health + House)) as Net_Pay
+from 
+    (
+        select t.emp_name as Employee, t.trns_type, t.amount
+        from emp_transaction t
+        
+    ) b
+pivot 
+    (
+        sum(amount)
+        for trns_type in ([Allowance],[Basic],[Health],[House],[Insurance],[Others])
+    ) p;
+
+
+--------------------------------------------------------------------------------------------------------------------------
+with THEtable as (
+with table1 as (
+				select sal.emp_id, sal.emp_name, inc.income as trns_type,
+				round((case when inc.percentage then (inc.percentage/100 * sal.base_salary)
+					  end
+					 )) as AMOUNT
+
+				from salary sal
+				CROSS join income inc),
+	 table2 as (
+				select sal.emp_id, sal.emp_name, ded.deduction as trns_type,
+				round((case 
+						when ded.percentage then (ded.percentage/100 *  sal.base_salary)
+					  end
+					 )) as AMOUNT
+
+				from salary sal
+				cross join deduction as ded),
+	 fullTable as (SELECT * FROM table1
+				   UNION all
+                   SELECT * FROM table2)
+select emp_id,emp_name,
+	sum(case when trns_type = 'Basic' then amount end)as Basic,
+	sum(case when trns_type = 'Allowance' then amount end) as Allowance,
+    sum(case when trns_type = 'Others' then amount end)as Others, 
+    sum(case when trns_type = 'Insurance' then amount end) as Insurance, 
+    sum(case when trns_type = 'Health' then amount end) as Health, 
+    sum(case when trns_type = 'House' then amount end)  as House
+from fullTable
+group by emp_id,emp_name
+)
+select THEtable.*,sum(basic + allowance + others) as Gross,
+				  sum(insurance + health + house) as Total_dedaction,
+                  (sum(basic + allowance + others) - sum(insurance + health + house)) as net_pay
+                  
+from THEtable
+group by emp_id,emp_name;
+--------------------------------------------------------------------------------------------------------------------------
